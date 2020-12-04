@@ -15,13 +15,17 @@ int main() {
   double pi = 3.141592653589793;
 
   // dataset size for 2D
-  int imax=1024;
-  //int imax=1024;
-  int kmax=65536;
+#if LONG >= 1
+  int imax=65536;
+  int kmax=1024;
+#else
+  int imax=8;
+  int kmax=8;
+#endif
 
   // geometry parameters
   double Lz  = 2.0*pi;
-  double dz = Lz/imax;
+  double dz = Lz/kmax;
   double dzk = 1.0/dz;
   double z;
 
@@ -35,18 +39,11 @@ int main() {
   fftw_plan fftw_f, fftw_b;
     
   // allocate arrays
-  double  **in  = malloc(imax*sizeof(double *));
-  double **out  = malloc(imax*sizeof(double *));
-    
-  in[0] = malloc(imax * kmax * sizeof(double));
-  out[0] = malloc(imax * kmax * sizeof(double));
-  for(i = 1; i < imax; i++) {
-    in[i] = in[0] + i * kmax;
-    out[i] = out[0] + i * kmax;
-  }
-    
-  double *inA  = malloc(imax*sizeof(double));
-  double *zrt  = malloc(imax*sizeof(double));
+  double  *in  = (double *) malloc(imax*kmax*sizeof(double));
+  double *out  = (double *) malloc(imax*kmax*sizeof(double));
+
+  double *inA  = malloc(kmax*sizeof(double));
+  double *zrt  = malloc(kmax*sizeof(double));
 
   // fftw kind parameter
   fftw_r2r_kind *kind;
@@ -69,8 +66,8 @@ int main() {
   // which fftew-plan to use
   
   printf("fftw_plan_r2r_2d   ");
-  fftw_f = fftw_plan_r2r_2d(imax,kmax, *in, *out, FFTW_R2HC,FFTW_R2HC, FFTW_MEASURE);
-  fftw_b = fftw_plan_r2r_2d(imax,kmax, *out, *in, FFTW_HC2R,FFTW_HC2R, FFTW_MEASURE);
+  fftw_f = fftw_plan_r2r_2d(kmax,imax,  in, out, FFTW_R2HC,FFTW_R2HC, FFTW_MEASURE);
+  fftw_b = fftw_plan_r2r_2d(kmax,imax, out,  in, FFTW_HC2R,FFTW_HC2R, FFTW_MEASURE);
 
   gettimeofday(&t2, NULL);
 
@@ -80,12 +77,12 @@ int main() {
     // set initial values
     for(i = 0;i <imax;i++){
       for(k = 0;k <kmax;k++){
-	z=(0.5+i)*dz;
-	in[i][k]  =  sin(z);
-	out[i][k] =  sin(z);
+	z=(0.5+k)*dz;
+	in[i*kmax+k]  =  sin(z);
+	out[i*kmax+k] =  sin(z);
 
 	// analytical solution
-	inA[i] = -sin(z);
+	inA[k] = -sin(z);
       }
     }
 
@@ -98,14 +95,15 @@ int main() {
 /* (Logical N=n, inverse is FFTW_HC2R.) */
 /* FFTW_HC2R computes the reverse of FFTW_R2HC, above. (Logical N=n, inverse is FFTW_R2HC.)  */
     
-    zrt[0]      = -2.0*dzk*dzk+2.0*dzk*dzk*cos(0.*2.0*pi/((double)imax));
-    zrt[imax/2] = -2.0*dzk*dzk+2.0*dzk*dzk*cos((0.+(double)imax/2)*2.0*pi/((double)imax));
+    zrt[0]      = -2.0*dzk*dzk+2.0*dzk*dzk*cos(0.*2.0*pi/((double)kmax));
+    zrt[kmax/2] = -2.0*dzk*dzk+2.0*dzk*dzk*cos((0.+(double)kmax/2)*2.0*pi/((double)kmax));
 
-    for(k = 1;k <imax/2;k++) {
-      zrt[k]=-2.0*dzk*dzk+2.0*dzk*dzk*cos(( ( ((double)k) ) )*2.0*pi/((double)imax));
-      zrt[imax-1-k+1]  = zrt[k];
+    for(k = 1;k <kmax/2;k++) {
+      zrt[k]=-2.0*dzk*dzk+2.0*dzk*dzk*cos(( ( ((double)k) ) )*2.0*pi/((double)kmax));
+      zrt[kmax-1-k+1]  = zrt[k];
       
     }
+
 
     // execute fftw-plan  ----> forward
     fftw_execute(fftw_f);
@@ -113,11 +111,11 @@ int main() {
     // to solve poisson equation -> divide by eigenvalues
     for( i=0;i<imax;i++) {
       for( k=0;k<kmax;k++) {
-	if(zrt[i] == 0.) {
-	  out[i][k]=0.0;
+	if(zrt[k] == 0.) {
+	  out[i*kmax+k]=0.0;
 	}
 	else {
-	  out[i][k]=out[i][k] / zrt[i];
+	  out[i*kmax+k]=out[i*kmax+k] / zrt[k];
 	}
       }
     }
@@ -129,8 +127,8 @@ int main() {
     error=0.0;
     for(k = 0;k <kmax;k++){
       for(i = 0;i <imax;i++){
-	in[i][k]/=imax;
-	error=error+fabs(in[i][k]-inA[i]);
+	in[i*kmax+k]/=imax*kmax;
+	error=error+fabs(in[i*kmax+k]-inA[i]);
       }
     }
 
@@ -144,6 +142,15 @@ int main() {
 
   printf("Dt plan create %10ld mus execute %10ld mus\n",Dt1,Dt2);
 
+#if VERBOSE >=1
+  // output  
+  for(k = 0;k <kmax;k++){
+    z=(0.5+k)*dz;
+    printf("%10.4f %10.4f %10.4f %10.4f %10.4f\n",z,in[k+0],in[k+kmax*(imax/2)],in[k+kmax*(imax-1)],inA[k]);
+    } 
+#endif
+
+
   // cleanup    
   fftw_destroy_plan(fftw_f);
   fftw_destroy_plan(fftw_b);
@@ -154,10 +161,8 @@ int main() {
   free(zrt);
 
 
-  free((void *)in[0]);
-  free((void *)in);
-  free((void *)out[0]);
-  free((void *)out);
+  free(in);
+  free(out);
 
   free(kind);
 

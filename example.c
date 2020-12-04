@@ -5,6 +5,7 @@
 #include <sys/time.h>
 
 
+
 int main() {
   // variables to time the different steps of fftw
   struct timeval t1, t2, t3;
@@ -15,10 +16,14 @@ int main() {
   double pi = 3.141592653589793;
 
   // dataset size for 2D
-  int imax=16;
-  //int imax=1024;
+#if LONG >= 1
+  int imax=65536;
+  int kmax=1024;
+#else
+  int imax=8;
   int kmax=8;
-
+#endif
+  
   // geometry parameters
   double Lz  = 2.0*pi;
   double dz = Lz/kmax;
@@ -28,29 +33,32 @@ int main() {
   // run variables
   int i,k,m;
 
-  // error compared to analytical solution
-  double error;
+  /* // error compared to analytical solution */
+  /* double error; */
 
   // fftw stuff
   fftw_plan fftw_f, fftw_b;
     
   // allocate arrays
-  double  **in  = malloc(imax*sizeof(double *));
-  double **out  = malloc(imax*sizeof(double *));
+  double  *in  = (double *) malloc(imax*kmax*sizeof(double));
+  double *out  = (double *) malloc(imax*kmax*sizeof(double));
     
-  in[0] = malloc(imax * kmax * sizeof(double));
-  out[0] = malloc(imax * kmax * sizeof(double));
-  for(i = 1; i < imax; i++) {
-    in[i] = in[0] + i * kmax;
-    out[i] = out[0] + i * kmax;
-  }
+  fftw_r2r_kind *kind;
+  int *n= (int *) fftw_malloc(sizeof(int *) * 1);
+  
+  /* int *TEST  = (int *) malloc(imax*kmax*sizeof(int)); */
+  /* int run=0; */
+  /* for(i=0;i<imax;i++) { */
+  /*   for(k=0;k<kmax;k++) { */
+  /*     TEST[i*kmax+k]=run; */
+  /*     run++; */
+  /*   } */
+  /* } */
+  /* for(m=0;m<imax*kmax;m++) */
+  /*   printf("%d : %d\n",m,*(TEST+m)); */
     
   double *inA  = malloc(kmax*sizeof(double));
   double *zrt  = malloc(kmax*sizeof(double));
-
-  // fftw kind parameter
-  fftw_r2r_kind *kind;
-  kind = (fftw_r2r_kind*) fftw_malloc(sizeof(fftw_r2r_kind) * 1);
 
 
   // definition of fftw_plan_many_r2r
@@ -66,32 +74,49 @@ int main() {
   /// Plan creation
   ///
   gettimeofday(&t1, NULL);
-  // which fftew-plan to use
+  
 #if FFT_PLAN_MANY>=1
   printf("fftw_plan_many_r2r ");
+
+  // fftw kind parameter
+  kind = (fftw_r2r_kind*) fftw_malloc(sizeof(fftw_r2r_kind) * 1);
+  
+  n[0]=kmax;
+
+  /* int *inembed = (int *) fftw_malloc(sizeof(int *) * 1); */
+  /* int *onembed = (int *) fftw_malloc(sizeof(int *) * 1); */
+  /* inembed[0] = kmax; */
+  /* onembed[0] = kmax; */
+  
+  int *inembed = NULL;
+  int *onembed = NULL;
+
   kind[0] = FFTW_R2HC;
-  fftw_f = fftw_plan_many_r2r(1,&kmax,imax,
-			      *in,&kmax,
+  fftw_f = fftw_plan_many_r2r(1,n,imax,
+			      in,inembed,
 			      1,kmax,
-			      *out,&kmax,
+			      out,onembed,
 			      1,kmax,
 			      kind, FFTW_MEASURE);
   
   kind[0] = FFTW_HC2R;
-  fftw_b = fftw_plan_many_r2r(1,&kmax,imax,
-			      *out,&kmax,
+  fftw_b = fftw_plan_many_r2r(1,n,imax,
+			      out,inembed,
 			      1,kmax,
-			      *in,&kmax,
+			      in,onembed,
 			      1,kmax,
 			      kind, FFTW_MEASURE);
 #endif
   
 #if FFT_PLAN_MANY<1
   printf("fftw_plan_r2r_2d   ");
-  fftw_f = fftw_plan_r2r_2d(imax,kmax, *in, *out, FFTW_R2HC,FFTW_R2HC, FFTW_MEASURE);
-  fftw_b = fftw_plan_r2r_2d(imax,kmax, *out, *in, FFTW_HC2R,FFTW_HC2R, FFTW_MEASURE);
+  fftw_f = fftw_plan_r2r_2d(kmax,imax,  in, out, FFTW_R2HC,FFTW_R2HC, FFTW_MEASURE);
+  fftw_b = fftw_plan_r2r_2d(kmax,imax, out,  in, FFTW_HC2R,FFTW_HC2R, FFTW_MEASURE);
 #endif
+  
   gettimeofday(&t2, NULL);
+
+  
 
   // number of executions
   for(m=0;m<M0;m++) {
@@ -100,8 +125,8 @@ int main() {
     for(i = 0;i <imax;i++){
       for(k = 0;k <kmax;k++){
 	z=(0.5+k)*dz;
-	in[i][k]  =  sin(z);
-	out[i][k] =  sin(z);
+	in[i*kmax+k]  =  sin(z);
+	out[i*kmax+k] =  sin(z);
 
 	// analytical solution
 	inA[k] = -sin(z);
@@ -125,31 +150,6 @@ int main() {
       zrt[kmax-1-k+1]  = zrt[k];
       
     }
-
-#if VERBOSE >=1
-    // output
-    printf("eigenvalues\n");
-    for(k = 0;k <kmax;k++){
-      z=(0.5+k)*dz;
-      printf("%10.4f\n",zrt[k]);
-    }
-
-    printf("\n\nbeginning\n");
-    for(k = 0;k <kmax;k++){
-      z=(0.5+k)*dz;
-      printf("%10.4f %10.4f %10.4f %10.4f %10.4f %10.4f\n",z,in[0][k],in[2][k],in[5][k],in[imax-1][k],inA[k]);
-    }
-
-    // check if I correctly understand how pointers work
-    /* for(i=0;i<imax;i++) { */
-    /*   printf("%d : ",i); */
-    /*   for(k=0;k<kmax;k++) { */
-    /* 	printf("%f ",*(*(in+i)+k)); */
-    /*   } */
-    /*   printf("\n"); */
-    /* } */
-    /* printf("\n"); */
-#endif
     
     // execute fftw-plan  ----> forward
     fftw_execute(fftw_f);
@@ -158,10 +158,10 @@ int main() {
     for( i=0;i<imax;i++) {
       for( k=0;k<kmax;k++) {
 	if(zrt[k] == 0.) {
-	  out[i][k]=0.0;
+	  out[i*kmax+k]=0.0;
 	}
 	else {
-	  out[i][k]=out[i][k] / zrt[k];
+	  out[i*kmax+k]=out[i*kmax+k] / zrt[k];
 	}
       }
     }
@@ -169,25 +169,14 @@ int main() {
     // execute fftw-plan  ----> backward
     fftw_execute(fftw_b);
 
-    //check error compred to analytical solution
-    error=0.0;
-    for(k = 0;k <kmax;k++){
-      for(i = 0;i <imax;i++){
-	in[i][k]/=kmax;
-	error=error+fabs(in[i][k]-inA[k]);
-      }
-    }
-    
-#if VERBOSE >=1
-    // output
-    printf("\n");
-    printf("\n\nending\n");
-
-    for(k = 0;k <kmax;k++){
-      z=(0.5+k)*dz;
-      printf("%10.4f %10.4f %10.4f %10.4f %10.4f %10.4f\n",z,in[0][k],in[2][k],in[5][k],in[imax-1][k],inA[k]);
-    } 
-#endif
+    /* //check error compred to analytical solution */
+    /* error=0.0; */
+    /* for(k = 0;k <kmax;k++){ */
+    /*   for(i = 0;i <imax;i++){ */
+    /* 	in[i*kmax+k]/=kmax; */
+    /* 	error=error+fabs(in[i*kmax+k]-inA[k]); */
+    /*   } */
+    /* } */
 
   }
   // time end of execution
@@ -196,8 +185,17 @@ int main() {
   // compute & display runtime
   long Dt1 = (((t2.tv_sec - t1.tv_sec) * 1000000) + t2.tv_usec) - (t1.tv_usec);
   long Dt2 = (((t3.tv_sec - t2.tv_sec) * 1000000) + t3.tv_usec) - (t2.tv_usec);
+  
+  printf("Dt plan create %10ld mus execute %10ld mus\n",Dt1,Dt2);
 
-  printf("Dt plan create %ld mus execute %ld mus\n",Dt1,Dt2);
+#if VERBOSE >=1
+  // output  
+  for(k = 0;k <kmax;k++){
+    z=(0.5+k)*dz;
+    printf("%10.4f %10.4f %10.4f %10.4f %10.4f\n",z,in[k+0],in[k+kmax*(imax/2)],in[k+kmax*(imax-1)],inA[k]);
+    } 
+#endif
+  
 
   // cleanup    
   fftw_destroy_plan(fftw_f);
@@ -205,16 +203,19 @@ int main() {
   fftw_cleanup();
 
 
+  free(kind);
+
+  free(n);
+  
   free(inA);
   free(zrt);
 
 
-  free((void *)in[0]);
-  free((void *)in);
-  free((void *)out[0]);
-  free((void *)out);
+  free(in);
+  free(out);
 
-  free(kind);
+  /* free((void *)TEST); */
+
 
   return 0;
 }
