@@ -1,19 +1,21 @@
 #!/bin/bash
 
-rm example
+MRUN=1000000
+MRUN=1
 
-echo "Plan many"
-# gcc example.c -lfftw3 -Wall -lm -g -Warray-bounds -fsanitize=address -o example -D VERBOSE=0 -D MRUN=1000000 -D FFT_PLAN=MANY
-gcc example.c -lfftw3 -lm -O3 -o example -D VERBOSE=0 -D MRUN=1000000 -D FFT_PLAN_MANY=1
-
-time ./example 
-
-echo
-rm example
-echo
-
-echo "Plan r2r_2d"
 # gcc example.c -lfftw3 -Wall -lm -g -Warray-bounds -fsanitize=address -o example -D VERBOSE=0 -D MRUN=1000000 -D FFT_PLAN=d
-gcc example.c -lfftw3 -lm -O3 -o example -D VERBOSE=0 -D MRUN=1000000 -D FFT_PLAN_MANY=0
 
-time ./example 
+rm example
+
+
+gcc example_fftw_plan_r2r_2d.c -lfftw3 -lm -O3 -o example -D VERBOSE=0 -D MRUN=$MRUN 
+
+#time ./example 
+./example
+
+rm example
+
+gcc example_fftw_plan_many_r2r.c -lfftw3 -lm -O3 -o example -D VERBOSE=0 -D MRUN=$MRUN
+
+#time ./example 
+./example

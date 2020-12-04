@@ -15,13 +15,13 @@ int main() {
   double pi = 3.141592653589793;
 
   // dataset size for 2D
-  int imax=16;
+  int imax=1024;
   //int imax=1024;
-  int kmax=8;
+  int kmax=65536;
 
   // geometry parameters
   double Lz  = 2.0*pi;
-  double dz = Lz/kmax;
+  double dz = Lz/imax;
   double dzk = 1.0/dz;
   double z;
 
@@ -45,8 +45,8 @@ int main() {
     out[i] = out[0] + i * kmax;
   }
     
-  double *inA  = malloc(kmax*sizeof(double));
-  double *zrt  = malloc(kmax*sizeof(double));
+  double *inA  = malloc(imax*sizeof(double));
+  double *zrt  = malloc(imax*sizeof(double));
 
   // fftw kind parameter
   fftw_r2r_kind *kind;
@@ -67,30 +67,11 @@ int main() {
   ///
   gettimeofday(&t1, NULL);
   // which fftew-plan to use
-#if FFT_PLAN_MANY>=1
-  printf("fftw_plan_many_r2r ");
-  kind[0] = FFTW_R2HC;
-  fftw_f = fftw_plan_many_r2r(1,&kmax,imax,
-			      *in,&kmax,
-			      1,kmax,
-			      *out,&kmax,
-			      1,kmax,
-			      kind, FFTW_MEASURE);
   
-  kind[0] = FFTW_HC2R;
-  fftw_b = fftw_plan_many_r2r(1,&kmax,imax,
-			      *out,&kmax,
-			      1,kmax,
-			      *in,&kmax,
-			      1,kmax,
-			      kind, FFTW_MEASURE);
-#endif
-  
-#if FFT_PLAN_MANY<1
   printf("fftw_plan_r2r_2d   ");
   fftw_f = fftw_plan_r2r_2d(imax,kmax, *in, *out, FFTW_R2HC,FFTW_R2HC, FFTW_MEASURE);
   fftw_b = fftw_plan_r2r_2d(imax,kmax, *out, *in, FFTW_HC2R,FFTW_HC2R, FFTW_MEASURE);
-#endif
+
   gettimeofday(&t2, NULL);
 
   // number of executions
@@ -99,12 +80,12 @@ int main() {
     // set initial values
     for(i = 0;i <imax;i++){
       for(k = 0;k <kmax;k++){
-	z=(0.5+k)*dz;
+	z=(0.5+i)*dz;
 	in[i][k]  =  sin(z);
 	out[i][k] =  sin(z);
 
 	// analytical solution
-	inA[k] = -sin(z);
+	inA[i] = -sin(z);
       }
     }
 
@@ -117,51 +98,26 @@ int main() {
 /* (Logical N=n, inverse is FFTW_HC2R.) */
 /* FFTW_HC2R computes the reverse of FFTW_R2HC, above. (Logical N=n, inverse is FFTW_R2HC.)  */
     
-    zrt[0]      = -2.0*dzk*dzk+2.0*dzk*dzk*cos(0.*2.0*pi/((double)kmax));
-    zrt[kmax/2] = -2.0*dzk*dzk+2.0*dzk*dzk*cos((0.+(double)kmax/2)*2.0*pi/((double)kmax));
+    zrt[0]      = -2.0*dzk*dzk+2.0*dzk*dzk*cos(0.*2.0*pi/((double)imax));
+    zrt[imax/2] = -2.0*dzk*dzk+2.0*dzk*dzk*cos((0.+(double)imax/2)*2.0*pi/((double)imax));
 
-    for(k = 1;k <kmax/2;k++) {
-      zrt[k]=-2.0*dzk*dzk+2.0*dzk*dzk*cos(( ( ((double)k) ) )*2.0*pi/((double)kmax));
-      zrt[kmax-1-k+1]  = zrt[k];
+    for(k = 1;k <imax/2;k++) {
+      zrt[k]=-2.0*dzk*dzk+2.0*dzk*dzk*cos(( ( ((double)k) ) )*2.0*pi/((double)imax));
+      zrt[imax-1-k+1]  = zrt[k];
       
     }
 
-#if VERBOSE >=1
-    // output
-    printf("eigenvalues\n");
-    for(k = 0;k <kmax;k++){
-      z=(0.5+k)*dz;
-      printf("%10.4f\n",zrt[k]);
-    }
-
-    printf("\n\nbeginning\n");
-    for(k = 0;k <kmax;k++){
-      z=(0.5+k)*dz;
-      printf("%10.4f %10.4f %10.4f %10.4f %10.4f %10.4f\n",z,in[0][k],in[2][k],in[5][k],in[imax-1][k],inA[k]);
-    }
-
-    // check if I correctly understand how pointers work
-    /* for(i=0;i<imax;i++) { */
-    /*   printf("%d : ",i); */
-    /*   for(k=0;k<kmax;k++) { */
-    /* 	printf("%f ",*(*(in+i)+k)); */
-    /*   } */
-    /*   printf("\n"); */
-    /* } */
-    /* printf("\n"); */
-#endif
-    
     // execute fftw-plan  ----> forward
     fftw_execute(fftw_f);
 
     // to solve poisson equation -> divide by eigenvalues
     for( i=0;i<imax;i++) {
       for( k=0;k<kmax;k++) {
-	if(zrt[k] == 0.) {
+	if(zrt[i] == 0.) {
 	  out[i][k]=0.0;
 	}
 	else {
-	  out[i][k]=out[i][k] / zrt[k];
+	  out[i][k]=out[i][k] / zrt[i];
 	}
       }
     }
@@ -173,21 +129,10 @@ int main() {
     error=0.0;
     for(k = 0;k <kmax;k++){
       for(i = 0;i <imax;i++){
-	in[i][k]/=kmax;
-	error=error+fabs(in[i][k]-inA[k]);
+	in[i][k]/=imax;
+	error=error+fabs(in[i][k]-inA[i]);
       }
     }
-    
-#if VERBOSE >=1
-    // output
-    printf("\n");
-    printf("\n\nending\n");
-
-    for(k = 0;k <kmax;k++){
-      z=(0.5+k)*dz;
-      printf("%10.4f %10.4f %10.4f %10.4f %10.4f %10.4f\n",z,in[0][k],in[2][k],in[5][k],in[imax-1][k],inA[k]);
-    } 
-#endif
 
   }
   // time end of execution
@@ -197,7 +142,7 @@ int main() {
   long Dt1 = (((t2.tv_sec - t1.tv_sec) * 1000000) + t2.tv_usec) - (t1.tv_usec);
   long Dt2 = (((t3.tv_sec - t2.tv_sec) * 1000000) + t3.tv_usec) - (t2.tv_usec);
 
-  printf("Dt plan create %ld mus execute %ld mus\n",Dt1,Dt2);
+  printf("Dt plan create %10ld mus execute %10ld mus\n",Dt1,Dt2);
 
   // cleanup    
   fftw_destroy_plan(fftw_f);
