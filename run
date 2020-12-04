@@ -32,3 +32,5 @@ gcc example.c -lfftw3 -lm -O3 -o example -D VERBOSE=$VERBOSE -D MRUN=$MRUN -D LO
 
 #time ./example 
 ./example
+
+

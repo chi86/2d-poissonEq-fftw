@@ -44,7 +44,14 @@ int main() {
   double *out  = (double *) malloc(imax*kmax*sizeof(double));
     
   fftw_r2r_kind *kind;
+  // fftw kind parameter
+  kind = (fftw_r2r_kind*) fftw_malloc(sizeof(fftw_r2r_kind) * 1);
+  
   int *n= (int *) fftw_malloc(sizeof(int *) * 1);
+
+  
+  int *inembed = NULL;
+  int *onembed = NULL;
   
   /* int *TEST  = (int *) malloc(imax*kmax*sizeof(int)); */
   /* int run=0; */
@@ -77,9 +84,6 @@ int main() {
   
 #if FFT_PLAN_MANY>=1
   printf("fftw_plan_many_r2r ");
-
-  // fftw kind parameter
-  kind = (fftw_r2r_kind*) fftw_malloc(sizeof(fftw_r2r_kind) * 1);
   
   n[0]=kmax;
 
@@ -88,9 +92,22 @@ int main() {
   /* inembed[0] = kmax; */
   /* onembed[0] = kmax; */
   
-  int *inembed = NULL;
-  int *onembed = NULL;
-
+  /* kind[0] = FFTW_R2HC; */
+  /* fftw_f = fftw_plan_many_r2r(1,n,imax, */
+  /* 			      in,inembed, */
+  /* 			      1,kmax, */
+  /* 			      out,onembed, */
+  /* 			      1,kmax, */
+  /* 			      kind, FFTW_MEASURE); */
+  
+  /* kind[0] = FFTW_HC2R; */
+  /* fftw_b = fftw_plan_many_r2r(1,n,imax, */
+  /* 			      out,inembed, */
+  /* 			      1,kmax, */
+  /* 			      in,onembed, */
+  /* 			      1,kmax, */
+  /* 			      kind, FFTW_MEASURE); */
+  
   kind[0] = FFTW_R2HC;
   fftw_f = fftw_plan_many_r2r(1,n,imax,
 			      in,inembed,
